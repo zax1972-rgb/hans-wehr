@@ -1,5 +1,5 @@
 /* Offline cache for the Hans Wehr dictionary: serves saved copies with no internet, updates them in the background when online. */
-const CACHE = 'hw-offline-v4';
+const CACHE = 'hw-offline-v5';
 const CORE = ['./', 'index.html', 'rd/reader.js', 'rd/reader.css', 'rd/pdf.min.js', 'rd/pdf.worker.min.js'];
 
 self.addEventListener('install', e => {

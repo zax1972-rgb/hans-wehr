@@ -139,6 +139,9 @@ button.mini{font-size:12px;padding:2px 8px;margin-inline-start:4px}
 .lvRoot{font-size:26px;font-weight:700;color:var(--acc)}
 .lvSub{font-size:12.5px;color:var(--mut);direction:ltr}
 #lvSeen .chip{font-size:18px;padding:1px 11px}
+.fcTools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px}.fcTools button{font-size:14px;padding:7px 11px}.fcTools button:disabled{opacity:.5}
+.fcSelL{display:flex;align-items:center;gap:6px;font-size:14px;margin-inline-end:auto}
+.fcPick{width:20px;height:20px;flex:none;accent-color:#c0392b;margin-inline-end:4px}
 #cbWrap{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
 .cbBox{background:var(--card,#fff);color:var(--ink,#222);border-radius:16px;padding:18px 16px;max-width:520px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.35);border-top:5px solid #c0392b;animation:cbUp .18s ease-out}
 @keyframes cbUp{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
@@ -1120,6 +1123,7 @@ if (typeof module !== 'undefined') module.exports = HW;
       } else if (tab === 'list') {
         h += viewSel + `<input id="fcFilter" class="fcIn" placeholder="Filter my words…" style="width:100%;margin:6px 0">`;
         if (decks.length) h += `<div class="row"><select id="fcBulk" class="fcIn">${deckOpts('', 'Add all the words shown to a deck…')}</select></div>`;
+        h += `<div class="fcTools"><label class="fcSelL"><input type="checkbox" id="fcSelAll"> Select all shown</label><button id="fcDelSel" disabled>🗑 Delete selected</button><button id="fcDelAll"${pool().length ? '' : ' disabled'}>🗑 Delete all shown (${pool().length})</button></div>`;
         h += `<div id="fcList">${listHtml('')}</div>`;
       } else if (tab === 'decks') {
         h += `<div class="hint">Group your words into decks – for example one deck for each book you read. A word can be in more than one deck.</div>
@@ -1168,11 +1172,11 @@ if (typeof module !== 'undefined') module.exports = HW;
     }
     function listHtml(q) {
       const k = HW.k1(q || '');
-      const L = pool().filter(c => !q || HW.k1(c.w).includes(k) || c.r.includes(k) || (c.m || '').toLowerCase().includes(q.toLowerCase()));
+      const L = shownWords(q);
       if (!L.length) return '<div class="empty">No words.</div>';
-      return L.map(c => { const i = cards.indexOf(c); return `<div class="ent fcRow"><div class="eh"><span class="a" data-w="${esc(c.w)}" style="cursor:pointer">${esc(c.w)}</span><span class="tag ar" style="font-size:15px">${esc([...c.r].join(' '))}</span><span class="t">${esc(c.t || '')}</span></div>
+      return L.map(c => { const i = cards.indexOf(c); return `<div class="ent fcRow"><div class="eh"><input type="checkbox" class="fcPick" data-pick="${i}" aria-label="Select ${esc(c.w)}"><span class="a" data-w="${esc(c.w)}" style="cursor:pointer">${esc(c.w)}</span><span class="tag ar" style="font-size:15px">${esc([...c.r].join(' '))}</span><span class="t">${esc(c.t || '')}</span></div>
         <div class="d">${esc((c.m || '').slice(0, 140))}${(c.m || '').length > 140 ? '…' : ''}</div>
-        <div class="hint">${c.f ? esc(c.f) + ' · ' : ''}${c.due <= now() ? '<b style="color:var(--acc2)">due now</b>' : 'due in ' + fmtDur(c.due - now())} · reviewed ${c.reps || 0}× <button class="mini" data-fcdel="${i}">Remove</button> <button class="mini" data-fcreset="${i}">Reset</button></div>
+        <div class="hint">${c.f ? esc(c.f) + ' · ' : ''}${c.due <= now() ? '<b style="color:var(--acc2)">due now</b>' : 'due in ' + fmtDur(c.due - now())} · reviewed ${c.reps || 0}× <button class="mini" data-fcdel="${i}">🗑 Delete</button> <button class="mini" data-fcreset="${i}">Reset</button></div>
         <div class="dkchips">${(c.dk || []).filter(deckById).map(id => `<span class="dchip">${esc(deckName(id))}<button data-dkrm="${i}|${id}" title="Take out of this deck">✕</button></span>`).join('')}${decks.length ? `<select class="fcIn deckSel" data-dkaddone="${i}">${deckOpts('', '＋ Deck…')}</select>` : ''}</div></div>`; }).join('');
     }
 
@@ -1319,7 +1323,7 @@ if (typeof module !== 'undefined') module.exports = HW;
       else if (d.fcnext) { qi++; card(); }
       else if (d.fcquit) view('study');
       else if (d.mc) answerMc(+d.mc);
-      else if (d.fcdel) { cards.splice(+d.fcdel, 1); save(); badge(); $('fcList').innerHTML = listHtml($('fcFilter').value); }
+      else if (d.fcdel) { const c = cards[+d.fcdel]; if (c) askDelWords([c]); }
       else if (d.fcreset) { const c = cards[+d.fcreset]; Object.assign(c, { s: 0, reps: 0, lapses: 0, due: now() }); save(); badge(); $('fcList').innerHTML = listHtml($('fcFilter').value); }
       else if (d.star) { const res = out._res && out._res[out._shown || 0]; if (!res) return; const on = toggle(out._word, res); t.classList.toggle('on', on); t.textContent = on ? '★ In flashcards' : '☆ Add to flashcards'; }
       else if (d.exp) {
@@ -1340,7 +1344,7 @@ if (typeof module !== 'undefined') module.exports = HW;
         badge(); $('sMsg').textContent = t.id === 'sResched' ? 'Saved, and every word has been rescheduled.' : 'Saved. New schedule applies from each word\'s next review.';
       }
       else if (t.id === 'impGo') $('impMsg').textContent = importText($('impText').value);
-      else if (t.id === 'fcWipe') { if (t.dataset.sure) { cards = []; save(); badge(); view('io'); } else { t.dataset.sure = 1; t.textContent = 'Tap again to delete all ' + cards.length + ' words'; } }
+      else if (t.id === 'fcWipe') { if (cards.length) askDelWords(cards.slice(), true); }
     });
     function starDeckApply(id) { const res = out._res && out._res[out._shown || 0]; if (!res || !id) return; const r = R[res.ri], c = cards.find(x => x.r === r.r && HW.k1(x.w) === HW.k1(out._word)); if (c && addTo(c, id)) save(); }
     document.addEventListener('change', e => {
@@ -1361,6 +1365,49 @@ if (typeof module !== 'undefined') module.exports = HW;
     function setBookDeck(name) { ctxDeck = name ? newDeck(name) : null; }
     function renameDeckName(a, b) { const d = decks.find(x => x.name === a); if (d && b && !decks.some(x => x.name === b)) { d.name = b; saveD(); } }
     function studyDeck(name) { const d = decks.find(x => x.name === name); filt = d ? d.id : ''; store.set('hw-deck-view', filt); view('study'); }
+    /* ---- delete words: one, the ones ticked, or all shown ---- */
+    function shownWords(q) {
+      q = q || ''; const k = HW.k1(q);
+      return pool().filter(c => !q || HW.k1(c.w).includes(k) || c.r.includes(k) || (c.m || '').toLowerCase().includes(q.toLowerCase()));
+    }
+    function picked() { return [...document.querySelectorAll('.fcPick:checked')].map(x => cards[+x.dataset.pick]).filter(Boolean); }
+    function updSel() {
+      const b = $('fcDelSel'); if (!b) return;
+      const n = picked().length, all = document.querySelectorAll('.fcPick').length;
+      b.disabled = !n; b.textContent = n ? `🗑 Delete selected (${n})` : '🗑 Delete selected';
+      b.classList.toggle('cbDanger', !!n);
+      const sa = $('fcSelAll'); if (sa) { sa.checked = !!all && n === all; sa.indeterminate = n > 0 && n < all; }
+      const da = $('fcDelAll'); if (da) da.textContent = `🗑 Delete all shown (${all})`, da.disabled = !all;
+    }
+    function relist() {
+      const f = $('fcFilter') ? $('fcFilter').value : null;
+      view();
+      if (f !== null && $('fcFilter')) { $('fcFilter').value = f; $('fcList').innerHTML = listHtml(f); }
+      updSel();
+    }
+    function askDelWords(list, everything) {
+      if (!list.length) return;
+      const n = list.length, sample = list.slice(0, 8).map(c => `<span class="ar" style="font-size:19px">${esc(c.w)}</span>`).join('، ');
+      const where = everything ? 'This deletes <b>every</b> flashcard you have, in all decks.' : (filt && deckById(filt) ? `They will be removed from your flashcards completely, not just from “${esc(deckName(filt))}”.` : 'They will be removed from your flashcards and from any decks they are in.');
+      banner(`<div class="cbT">🗑 Delete ${n === 1 ? 'this word' : (everything ? 'all ' : '') + n + ' words'}?</div>
+        <div class="cbM" style="direction:rtl;text-align:right;margin:4px 0 8px">${sample}${n > 8 ? ' …' : ''}</div>
+        <div class="cbM">${where} Their review history goes too. You can undo this for a few seconds afterwards.</div>
+        <div class="cbB"><button class="cbDanger" data-cb="yes">Delete ${n === 1 ? 'word' : n + ' words'}</button><button data-cb="no">Cancel</button></div>`,
+        () => {
+          const snap = JSON.stringify(cards), gone = new Set(list);
+          cards = cards.filter(c => !gone.has(c)); save(); badge(); relist();
+          toast(`Deleted ${n === 1 ? '“' + esc(list[0].w) + '”' : n + ' words'}.`, 'Undo', () => { cards = JSON.parse(snap); save(); badge(); relist(); toast('Words restored.'); });
+        });
+    }
+    document.addEventListener('change', e => {
+      if (e.target.id === 'fcSelAll') { document.querySelectorAll('.fcPick').forEach(x => x.checked = e.target.checked); updSel(); }
+      else if (e.target.classList && e.target.classList.contains('fcPick')) updSel();
+    });
+    document.addEventListener('click', e => {
+      const t = e.target.closest('#fcDelSel,#fcDelAll'); if (!t) return;
+      if (t.id === 'fcDelSel') askDelWords(picked()); else askDelWords(shownWords($('fcFilter') ? $('fcFilter').value : ''), !filt && !($('fcFilter') && $('fcFilter').value));
+    });
+    document.addEventListener('input', e => { if (e.target.id === 'fcFilter') setTimeout(updSel, 0); });
     /* ---- delete a deck, after a confirmation banner, with undo ---- */
     function dropDeck(id, withWords) {
       const snap = { decks: JSON.stringify(decks), cards: JSON.stringify(cards), add: S.addDeck, filt };
@@ -1386,7 +1433,7 @@ if (typeof module !== 'undefined') module.exports = HW;
         k => { if (k === 'keep') dropDeck(id, false); else if (k === 'all') dropDeck(id, true); });
     }
     function banner(html, done) {
-      let b = document.getElementById('cbWrap'); if (b) b.remove();
+      let b = document.getElementById('cbWrap'); if (b) b.remove(); const ot = document.getElementById('fcToast'); if (ot) ot.remove();
       b = document.createElement('div'); b.id = 'cbWrap'; b.innerHTML = `<div class="cbBox" role="alertdialog" aria-modal="true">${html}</div>`;
       document.body.appendChild(b);
       const close = k => { b.remove(); document.removeEventListener('keydown', key); if (k && k !== 'no') done(k); };
