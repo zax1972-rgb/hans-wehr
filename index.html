@@ -139,6 +139,11 @@ button.mini{font-size:12px;padding:2px 8px;margin-inline-start:4px}
 .lvRoot{font-size:26px;font-weight:700;color:var(--acc)}
 .lvSub{font-size:12.5px;color:var(--mut);direction:ltr}
 #lvSeen .chip{font-size:18px;padding:1px 11px}
+#lvFrz{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
+#lvCrop{position:absolute;border:3px solid #ffd34d;border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);pointer-events:none}
+#lvCropBar{position:absolute;left:0;right:0;bottom:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 8px}
+#lvCropBar button{font-size:15px;padding:9px 14px;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+#lvCam.cropping #lvBox{display:none}
 #lvSeen .chip.fc::after{content:' ★';font-size:12px;color:var(--acc2)}
 .lvAdded{display:inline-block;font-size:13px;background:var(--hi);border:1px solid var(--acc2);border-radius:999px;padding:1px 10px;margin-top:4px}
 @media (prefers-color-scheme:dark){.g-again,.g-hard,.g-good,.g-easy,.mc.ok,.mc.bad{color:#111}.fcTabs button.on{color:#10201b}}
@@ -201,12 +206,12 @@ button.mini{font-size:12px;padding:2px 8px;margin-inline-start:4px}
 
   <div id="live" class="hidden">
     <div class="lvTop"><button id="lvClose" aria-label="Close live scanner">✕</button><span id="lvStat">Starting the camera…</span><button id="lvTorch" class="hidden" aria-label="Torch">🔦</button><button id="lvPause" aria-label="Pause">⏸ Pause</button></div>
-    <div id="lvCam"><video id="lvVid" playsinline muted autoplay></video><div id="lvBox"></div><div id="lvPaused" class="hidden">Paused – tap the picture to carry on</div></div>
+    <div id="lvCam"><video id="lvVid" playsinline muted autoplay></video><div id="lvBox"></div><div id="lvPaused" class="hidden">Paused</div><canvas id="lvFrz" class="hidden"></canvas><div id="lvCrop" class="hidden"></div><div id="lvCropBar" class="hidden"><button id="lvCropGo" class="pri">✓ Read this word</button><button id="lvCropBack">↺ Back to live</button></div></div>
     <div class="lvCtl"><span class="hint">Box:</span><button data-lvsize="w" class="on">One word</button><button data-lvsize="l">Whole line</button><span id="lvZoomW" class="hidden" style="display:flex;flex:1;align-items:center;gap:6px"><span class="hint">Zoom</span><input id="lvZoom" type="range"></span></div>
     <div class="lvCtl"><label style="display:flex;align-items:center;gap:6px;font-size:14px"><input type="checkbox" id="lvAuto"> 🗂 Add scanned words to flashcards</label><select id="lvDeck" class="fcIn" title="Deck for scanned words" style="max-width:46%"></select><span id="lvCount" class="hint"></span><button id="lvStudy">Study them</button></div>
     <div id="lvBody">
       <div class="chips" id="lvLine"></div>
-      <div id="lvRes"><div class="card"><div class="hint">Put one Arabic word inside the white box and hold the phone steady. The breakdown appears here as soon as the word is read – root, form, tense or pattern, prefixes, suffixes and the Hans Wehr meaning.</div></div></div>
+      <div id="lvRes"><div class="card"><div class="hint">Put one Arabic word inside the white box and hold the phone steady – or <b>tap the picture</b> to freeze it and draw a box around the exact word. The breakdown appears here as soon as the word is read – root, form, tense or pattern, prefixes, suffixes and the Hans Wehr meaning.</div></div></div>
       <div id="lvSeenW" class="hidden"><div class="sec">Scanned so far</div><div class="chips" id="lvSeen"></div></div>
     </div>
   </div>
@@ -1610,11 +1615,15 @@ if (typeof module !== 'undefined') module.exports = HW;
       for (let i = 0; i < 144; i++) sig[i] = (td[i * 4] + td[i * 4 + 1] + td[i * 4 + 2]) / 3;
       let diff = 255; if (lastSig) { diff = 0; for (let i = 0; i < 144; i++) diff += Math.abs(sig[i] - lastSig[i]); diff /= 144; }
       lastSig = sig;
-      // scale so the text is a comfortable height for the reader, then binarise (Otsu)
-      const targetH = size === 'w' ? 150 : 110, sc = Math.min(3, Math.max(0.4, targetH / h));
+      const r = prep(vid, x, y, w, h, size === 'w' ? 150 : 110);
+      return Object.assign(r, { diff });
+    }
+    // copy a region, scale so the text is a comfortable height for the reader, then binarise (Otsu)
+    function prep(src, x, y, w, h, targetH) {
+      const sc = Math.min(3, Math.max(0.4, targetH / h));
       const c = document.createElement('canvas'); c.width = Math.round(w * sc) + 40; c.height = Math.round(h * sc) + 40;
       const cx = c.getContext('2d', { willReadFrequently: true }); cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
-      cx.imageSmoothingQuality = 'high'; cx.drawImage(vid, x, y, w, h, 20, 20, w * sc, h * sc);
+      cx.imageSmoothingQuality = 'high'; cx.drawImage(src, x, y, w, h, 20, 20, w * sc, h * sc);
       const id = cx.getImageData(20, 20, c.width - 40, c.height - 40), d = id.data, n = d.length / 4;
       const g = new Uint8Array(n), hist = new Array(256).fill(0);
       for (let i = 0, j = 0; i < d.length; i += 4, j++) { g[j] = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000; hist[g[j]]++; }
@@ -1626,16 +1635,16 @@ if (typeof module !== 'undefined') module.exports = HW;
       const inv = dark > n / 2;
       for (let i = 0, j = 0; i < d.length; i += 4, j++) { let v = g[j] < th ? 0 : 255; if (inv) v = 255 - v; d[i] = d[i + 1] = d[i + 2] = v; }
       cx.putImageData(id, 20, 20);
-      return { c, diff, spread, ink: Math.min(dark, n - dark) / n };
+      return { c, spread, ink: Math.min(dark, n - dark) / n };
     }
     const clean = w => w.replace(/[^ء-ْٰ]/g, '');
     function scoreOf(w) { const r = HW.analyse(w); return r.length ? r[0].score : 0; }
-    function pick(r) {
+    function pick(r, tight) {
       const toks = [], scored = [];
       if (r.words && r.words.length) {
         // use word positions: prefer the word nearest the centre of the box, and avoid words cut off by its edges
         for (const wd of r.words) {
-          const b = wd.b, edge = b.x0 <= 24 || b.x1 >= r.W - 24, dist = Math.abs((b.x0 + b.x1) / 2 - r.W / 2) / r.W;
+          const b = wd.b, edge = !tight && (b.x0 <= 24 || b.x1 >= r.W - 24), dist = Math.abs((b.x0 + b.x1) / 2 - r.W / 2) / r.W;
           for (const w of splitMerged(clean(wd.t))) if (HW.k1(w).length >= 2) { toks.push(w); scored.push({ w, s: scoreOf(w), edge, dist }); }
         }
       } else {
@@ -1713,10 +1722,74 @@ if (typeof module !== 'undefined') module.exports = HW;
         } else stat('Checking… <b class="ar" style="font-size:18px">' + esc(p.word) + '</b>');
       }
     }
-    function setPaused(v) {
+    /* ---- tap to freeze the picture and draw a box around one word ---- */
+    let cropping = false, frame = null, fmap = null, crop = null, dragC = null;
+    const frz = $('lvFrz');
+    function drawCrop() {
+      const el = $('lvCrop'); el.classList.toggle('hidden', !crop);
+      if (crop) Object.assign(el.style, { left: crop[0] + 'px', top: crop[1] + 'px', width: crop[2] + 'px', height: crop[3] + 'px' });
+      $('lvCropGo').disabled = !crop;
+    }
+    function startCrop(e) {
+      const vw = vid.videoWidth, vh = vid.videoHeight; if (!vw || !vh) return;
+      frame = document.createElement('canvas'); frame.width = vw; frame.height = vh;
+      frame.getContext('2d').drawImage(vid, 0, 0);
+      const cw = vid.clientWidth, ch = vid.clientHeight, s = Math.max(cw / vw, ch / vh);
+      fmap = { s, ox: (vw * s - cw) / 2, oy: (vh * s - ch) / 2 };
+      const dpr = window.devicePixelRatio || 1;
+      frz.width = Math.round(cw * dpr); frz.height = Math.round(ch * dpr);
+      frz.getContext('2d').drawImage(frame, fmap.ox / s, fmap.oy / s, cw / s, ch / s, 0, 0, frz.width, frz.height);
+      cropping = true; setPaused(true, true);
+      $('lvCam').classList.add('cropping'); frz.classList.remove('hidden'); $('lvCropBar').classList.remove('hidden'); $('lvPaused').classList.add('hidden');
+      const r = $('lvCam').getBoundingClientRect();
+      boxAt(e ? e.clientX - r.left : cw / 2, e ? e.clientY - r.top : ch / 2);
+      stat('Drag a box around the word, then tap <b>✓ Read this word</b>.');
+    }
+    function boxAt(px, py) { // default box centred where you tapped
+      const cw = vid.clientWidth, ch = vid.clientHeight, w = Math.min(cw * 0.42, 220), h = Math.min(ch * 0.16, 70);
+      crop = [Math.max(0, Math.min(cw - w, px - w / 2)), Math.max(0, Math.min(ch - h, py - h / 2)), w, h]; drawCrop();
+    }
+    function endCrop() {
+      cropping = false; frame = null; crop = null; drawCrop();
+      $('lvCam').classList.remove('cropping'); frz.classList.add('hidden'); $('lvCropBar').classList.add('hidden');
+    }
+    const fpt = e => { const r = frz.getBoundingClientRect(); return [Math.max(0, Math.min(r.width, e.clientX - r.left)), Math.max(0, Math.min(r.height, e.clientY - r.top))]; };
+    frz.addEventListener('pointerdown', e => { e.preventDefault(); frz.setPointerCapture(e.pointerId); dragC = { p: fpt(e), moved: false }; });
+    frz.addEventListener('pointermove', e => {
+      if (!dragC) return; const p = fpt(e), a = dragC.p;
+      if (!dragC.moved && Math.hypot(p[0] - a[0], p[1] - a[1]) < 8) return;
+      dragC.moved = true; crop = [Math.min(a[0], p[0]), Math.min(a[1], p[1]), Math.abs(p[0] - a[0]), Math.abs(p[1] - a[1])]; drawCrop();
+    });
+    frz.addEventListener('pointerup', e => {
+      if (!dragC) return; const d = dragC; dragC = null;
+      if (!d.moved) boxAt(d.p[0], d.p[1]);
+      else if (crop && (crop[2] < 14 || crop[3] < 10)) boxAt(d.p[0], d.p[1]);
+    });
+    frz.addEventListener('click', e => e.stopPropagation());
+    async function readCrop() {
+      if (!frame || !crop) return;
+      const { s, ox, oy } = fmap;
+      let x = (crop[0] + ox) / s, y = (crop[1] + oy) / s, w = crop[2] / s, h = crop[3] / s;
+      x = Math.max(0, x); y = Math.max(0, y); w = Math.min(frame.width - x, w); h = Math.min(frame.height - y, h);
+      const g = prep(frame, x, y, w, h, 150);
+      $('lvCropGo').disabled = true; stat('Reading your box…');
+      try {
+        const r = await OCR.read(g.c, { psm: crop[2] / crop[3] > 6 ? '7' : '8', raw: true });
+        let p = pick(r, true);
+        if ((!p || !p.word) && r.lines.length === 0) { const r2 = await OCR.read(g.c, { psm: '7', raw: true }); p = pick(r2, true); }
+        if (!p || !p.word) { stat('Nothing readable in the box. Draw it a little bigger around the word, or add light.'); return; }
+        show(p.word, p.fixed ? `Read as <span class="ar" style="font-size:18px">${esc(p.toks.join(' '))}</span> – closest dictionary word shown (not added automatically – tap ☆ if it is right).` : '', !p.fixed);
+        lineChips(p.toks, p.word); $('lvBody').scrollTop = 0;
+        stat(`Read: <b class="ar" style="font-size:18px">${esc(p.word)}</b> – draw another box, or tap ↺ Back to live.`);
+      } catch (err) { stat('Reader error: ' + esc(err.message || err)); }
+      finally { $('lvCropGo').disabled = !crop; }
+    }
+    $('lvCropGo').onclick = e => { e.stopPropagation(); readCrop(); };
+    $('lvCropBack').onclick = e => { e.stopPropagation(); endCrop(); setPaused(false); stat('Aim the box at an Arabic word…'); };
+    function setPaused(v, quiet) {
       paused = v; $('lvPaused').classList.toggle('hidden', !v);
       $('lvPause').textContent = v ? '▶ Resume' : '⏸ Pause'; $('lvPause').classList.toggle('on', v);
-      if (v) { vid.pause(); stat('Paused. Tap a word below or tap the picture to scan again.'); } else { vid.play().catch(() => { }); votes = []; lastSig = null; still = 0; }
+      if (v) { vid.pause(); if (!quiet) stat('Paused. Tap the picture to draw a box around a word, or ▶ Resume.'); } else { if (cropping) endCrop(); vid.play().catch(() => { }); votes = []; lastSig = null; still = 0; }
     }
     function blocked(extra) {
       stat('The camera is not available on this page.' + (extra ? ' (' + extra + ')' : ''));
@@ -1761,7 +1834,7 @@ if (typeof module !== 'undefined') module.exports = HW;
       running = true; loopP = loop();
     }
     function stop() {
-      running = false;
+      running = false; if (cropping) endCrop();
       if (stream) stream.getTracks().forEach(t => t.stop());
       stream = null; track = null; vid.srcObject = null;
     }
@@ -1783,7 +1856,7 @@ if (typeof module !== 'undefined') module.exports = HW;
     $('lvStudy').onclick = () => { const name = LS.deck ? FC.scanDeckName(LS.deck) : ''; close(null, true); $('mCards').click(); if (name) FC.studyDeck(name); };
     $('lvClose').onclick = () => close();
     $('lvPause').onclick = () => setPaused(!paused);
-    $('lvCam').onclick = () => setPaused(!paused);
+    $('lvCam').onclick = e => { if (cropping || !stream) return; startCrop(e); };
     $('lvTorch').onclick = () => { if (!track) return; const on = !$('lvTorch').classList.contains('on'); track.applyConstraints({ advanced: [{ torch: on }] }).then(() => $('lvTorch').classList.toggle('on', on)).catch(() => { }); };
     $('lvZoom').oninput = e => { if (track) track.applyConstraints({ advanced: [{ zoom: +e.target.value }] }).catch(() => { }); lastSig = null; };
     document.addEventListener('visibilitychange', () => { if (document.hidden && running) { /* loop idles while hidden */ } });
