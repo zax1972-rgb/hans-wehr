@@ -1,0 +1,107 @@
+/* ===== Arabic book reader (overlay on the Hans Wehr dictionary page) ===== */
+#rd{position:fixed;inset:0;z-index:55;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;
+  --page:#fbf7ee;--pink:#2a2620;--rule:#d9ccb0;--fs:24px;--lh:2.05}
+#rd.th-white{--page:#ffffff;--pink:#1a1a1a}
+#rd.th-sepia{--page:#f4ead3;--pink:#3b2f1e}
+#rd.th-dark{--page:#16191c;--pink:#e7e1d4;--rule:#3a3f45}
+@media (prefers-color-scheme:dark){#rd.th-auto{--page:#16191c;--pink:#e7e1d4;--rule:#3a3f45}}
+#rd.hidden{display:none!important}
+#rd button{font:inherit;cursor:pointer;border:0;border-radius:11px;background:var(--chip);color:var(--ink);padding:8px 12px}
+#rd button.pri{background:var(--acc);color:#fff}
+@media (prefers-color-scheme:dark){#rd button.pri{color:#10201b}}
+#rd .bar{display:flex;align-items:center;gap:6px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:var(--acc);color:#fff;flex-wrap:wrap}
+@media (prefers-color-scheme:dark){#rd .bar{background:#1d3530}}
+#rd .bar button{background:rgba(255,255,255,.14);color:#fff;padding:7px 11px}
+#rd .bar .ttl{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rd .bar .ttl .ar{font-size:20px}
+#rd .bar .badge{background:var(--acc2);color:#fff;border-radius:999px;font-size:12px;padding:0 7px;margin-inline-start:4px}
+#rd .body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#rd .wrap{max-width:820px;margin:0 auto;padding:12px 12px 90px}
+#rd .hint{color:var(--mut);font-size:13.5px}
+#rd .sec{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mut);margin:16px 0 6px;font-weight:600}
+#rd .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+#rd .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-top:10px}
+#rd .filebtn{display:inline-block;background:var(--acc);color:#fff;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:600}
+@media (prefers-color-scheme:dark){#rd .filebtn{color:#10201b}}
+#rd .in{font:inherit;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+
+/* library */
+#rd .books{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px}
+#rd .bk{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;display:flex;flex-direction:column}
+#rd .bk img,#rd .bk .noimg{width:100%;aspect-ratio:3/4;object-fit:cover;background:var(--chip);display:block}
+#rd .bk .meta{padding:8px 10px}
+#rd .bk .bt{font-weight:600;font-size:15px;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#rd .bk .bt.ar{font-size:19px}
+#rd .pbar{height:5px;background:var(--chip);border-radius:9px;overflow:hidden;margin-top:6px}
+#rd .pbar div{height:100%;background:var(--acc2);width:0}
+
+/* job strip */
+#rd .job{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--hi);border-bottom:1px solid var(--line);font-size:13.5px;flex-wrap:wrap}
+#rd .job .pbar{flex:1;min-width:80px;margin:0}
+#rd .job button{padding:4px 10px;font-size:13px}
+
+/* the page */
+#rd .pg{background:var(--page);color:var(--pink);border:1px solid var(--rule);border-radius:6px;box-shadow:0 2px 14px rgba(0,0,0,.08);padding:26px 22px 18px;margin:8px auto 0;max-width:760px;min-height:60vh;position:relative}
+#rd .txt{direction:rtl;text-align:justify;font-family:var(--ar);font-size:var(--fs);line-height:var(--lh);unicode-bidi:isolate}
+#rd .txt p{margin:0 0 .55em;text-indent:1.2em}
+#rd .txt .t-title{text-align:center;font-size:1.65em;font-weight:700;color:var(--acc);margin:.3em 0 .5em;line-height:1.5;text-indent:0}
+#rd .txt .t-title::after{content:"۞";display:block;font-size:.5em;color:var(--acc2);margin-top:.15em}
+#rd .txt .t-heading{text-align:center;font-size:1.28em;font-weight:700;color:var(--acc);margin:.7em 0 .35em;line-height:1.5;text-indent:0}
+#rd .txt .t-subheading{font-size:1.1em;font-weight:700;color:var(--acc2);margin:.6em 0 .25em;text-indent:0}
+#rd .txt .t-verse{text-align:center;color:var(--acc);text-indent:0;margin:.3em .5em .55em}
+#rd .txt .t-poetry{text-align:center;text-indent:0;margin:.2em 0 .5em;font-style:normal}
+#rd .txt .t-poetry .hm{display:inline-block;min-width:40%;padding:0 .6em}
+#rd .txt .t-quote{text-indent:0;margin:.3em 1.2em .55em;color:var(--acc)}
+#rd .txt .t-footnote{font-size:.72em;line-height:1.8;text-indent:0;margin:0 0 .3em;color:var(--mut)}
+#rd .txt .fnrule{border:0;border-top:1px solid var(--rule);width:35%;margin:1em 0 .5em auto}
+#rd .w{cursor:pointer;border-radius:5px;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;transition:background .15s}
+#rd .w.on{background:var(--hi);box-shadow:0 0 0 2px var(--acc2)}
+#rd .w.press{background:var(--chip)}
+#rd .pno{text-align:center;color:var(--mut);font-size:13px;margin-top:14px}
+#rd .scan{display:block;width:100%;border-radius:4px;background:#fff}
+#rd .scanbox{margin-top:10px}
+#rd .empty{text-align:center;color:var(--mut);padding:30px 6px}
+#rd .nav{display:flex;align-items:center;gap:8px;justify-content:space-between;max-width:760px;margin:12px auto 0}
+#rd .nav input{width:70px;text-align:center}
+#rd .edit textarea{width:100%;min-height:55vh;font-family:var(--ar);font-size:20px;line-height:1.8;direction:rtl;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+
+/* sheets */
+#rd .sheet{position:fixed;inset:0;z-index:58;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center}
+#rd .sheet>div{background:var(--card);color:var(--ink);width:100%;max-width:820px;max-height:85vh;overflow:auto;border-radius:18px 18px 0 0;padding:14px 14px max(18px,env(safe-area-inset-bottom))}
+#rd .sheet h3{margin:0 0 6px;font-size:17px}
+#rd .toc a{display:flex;gap:10px;justify-content:space-between;padding:9px 6px;border-top:1px solid var(--line);color:var(--ink);text-decoration:none;cursor:pointer}
+#rd .toc a .ar{font-size:21px}
+#rd .toc a.l2{padding-inline-end:26px}
+#rd .toc a.l2 .ar{font-size:18px;color:var(--mut)}
+#rd .toc a.l1 .ar{font-weight:700;color:var(--acc)}
+#rd .toc a small{color:var(--mut);white-space:nowrap}
+#rd .opt{display:flex;gap:10px;align-items:flex-start;margin:9px 0;line-height:1.4}
+#rd .opt input{margin-top:5px;transform:scale(1.2)}
+#rd .seg{display:inline-flex;border-radius:11px;overflow:hidden;border:1px solid var(--line)}
+#rd .seg button{border-radius:0;background:var(--card)}
+#rd .seg button.on{background:var(--acc);color:#fff}
+#rd .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:999px;z-index:70;font-size:14px;max-width:90vw;text-align:center}
+
+/* dictionary lookup: the book shrinks to the top strip and the dictionary shows underneath */
+body.rd-look #rd{bottom:auto;height:var(--rdh,40vh);box-shadow:0 6px 18px rgba(0,0,0,.25);border-bottom:2px solid var(--acc2)}
+body.rd-look #rd .bar,body.rd-look #rd .job,body.rd-look #rd .nav,body.rd-look #rd .pno{display:none}
+body.rd-look #rd .lookbar{display:flex}
+#rd .lookbar{display:none;align-items:center;gap:8px;padding:6px 10px;padding-top:max(6px,env(safe-area-inset-top));background:var(--acc);color:#fff}
+#rd .lookbar .lw{flex:1;font-family:var(--ar);font-size:22px;direction:rtl;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rd .lookbar button{background:rgba(255,255,255,.16);color:#fff;padding:5px 10px;font-size:14px}
+body.rd-look>header{display:none}
+body.rd-look main{padding-top:calc(var(--rdh,40vh) + 4px)}
+body.rd-look .search{top:var(--rdh,40vh)}
+body.rd-look #rd .pg{min-height:0;padding-top:14px}
+body.rd-open{overflow:hidden}
+body.rd-look{overflow:auto}
+#rd .addwrap{position:relative;display:inline-block;overflow:hidden;border-radius:12px}
+#rd .addwrap input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:200px;z-index:2}
+/* flashcard decks (dictionary page) */
+.starWrap{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.deckSel{font-size:13.5px;padding:6px 8px;max-width:220px}
+.dkchips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;align-items:center}
+.dchip{background:var(--hi);border:1px solid var(--acc2);border-radius:999px;padding:1px 4px 1px 10px;font-size:13px;display:inline-flex;align-items:center;gap:2px}
+.dchip button{background:transparent;border:0;padding:0 5px;font-size:12px;color:var(--mut);cursor:pointer}
+.deckView{margin:2px 0 8px}.deckView select{flex:1;min-width:0}
+.deckRow .row{flex-wrap:wrap}.deckRow .row button{font-size:14px;padding:7px 10px}
