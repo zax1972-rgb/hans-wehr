@@ -139,6 +139,15 @@ button.mini{font-size:12px;padding:2px 8px;margin-inline-start:4px}
 .lvRoot{font-size:26px;font-weight:700;color:var(--acc)}
 .lvSub{font-size:12.5px;color:var(--mut);direction:ltr}
 #lvSeen .chip{font-size:18px;padding:1px 11px}
+#cbWrap{position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;padding:12px;padding-bottom:max(12px,env(safe-area-inset-bottom))}
+.cbBox{background:var(--card,#fff);color:var(--ink,#222);border-radius:16px;padding:18px 16px;max-width:520px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.35);border-top:5px solid #c0392b;animation:cbUp .18s ease-out}
+@keyframes cbUp{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.cbT{font-size:18px;font-weight:700;margin-bottom:6px}.cbM{color:var(--mut);line-height:1.45}
+.cbB{display:flex;flex-direction:column;gap:8px;margin-top:14px}.cbB button{width:100%;padding:12px;font-size:15.5px}
+.cbDanger{background:#c0392b!important;color:#fff!important;border-color:#c0392b!important}
+#fcToast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:91;background:#222;color:#fff;border-radius:999px;padding:9px 10px 9px 18px;display:flex;gap:12px;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,.3);font-size:14.5px;max-width:92vw}
+#fcToast button{background:#ffd34d;color:#222;border:0;border-radius:999px;padding:6px 14px;font-weight:700}
+@media (prefers-reduced-motion:reduce){.cbBox{animation:none}}
 #lvFrz{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}
 #lvCrop{position:absolute;border:3px solid #ffd34d;border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);pointer-events:none}
 #lvCropBar{position:absolute;left:0;right:0;bottom:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 8px}
@@ -1299,7 +1308,7 @@ if (typeof module !== 'undefined') module.exports = HW;
       if (d.dkstudy || d.dklist) { filt = d.dkstudy || d.dklist; store.set('hw-deck-view', filt); view(d.dkstudy ? 'study' : 'list'); return; }
       if (d.dkren) { const row = t.closest('.deckRow'), dk = deckById(d.dkren); row.querySelector('.eh').innerHTML = `<input class="fcIn dkNew" value="${esc(dk.name)}" style="flex:1;min-width:160px"><button class="pri" data-dkrensave="${dk.id}">Save</button>`; row.querySelector('.dkNew').focus(); return; }
       if (d.dkrensave) { const dk = deckById(d.dkrensave), v = t.closest('.deckRow').querySelector('.dkNew').value.replace(/\s+/g, ' ').trim().slice(0, 80); if (dk && v) { dk.name = v; saveD(); } view('decks'); return; }
-      if (d.dkdel) { if (!t.dataset.sure) { t.dataset.sure = 1; t.textContent = 'Tap again to delete'; return; } decks = decks.filter(x => x.id !== d.dkdel); for (const c of cards) if (c.dk) c.dk = c.dk.filter(x => x !== d.dkdel); if (S.addDeck === d.dkdel) { S.addDeck = ''; saveS(); } if (filt === d.dkdel) { filt = ''; store.set('hw-deck-view', ''); } saveD(); save(); view('decks'); return; }
+      if (d.dkdel) { askDelDeck(d.dkdel); return; }
       if (d.dkrm) { const [i, id] = d.dkrm.split('|'); const c = cards[+i]; if (c && c.dk) { c.dk = c.dk.filter(x => x !== id); save(); } $('fcList').innerHTML = listHtml($('fcFilter').value); return; }
       if (t.id === 'dkAdd') { const id = newDeck($('dkName').value); if (!id) { $('dkMsg').textContent = 'Type a name first.'; return; } view('decks'); $('dkMsg').textContent = 'Deck “' + deckName(id) + '” is ready.'; return; }
       if (d.newdeckok) { const box = t.closest('.starWrap'), id = newDeck(box.querySelector('[data-newdeck]').value); if (!id) return; setCur(id); starDeckApply(id); box.outerHTML = starBtn(out._word, out._res[out._shown || 0]); return; }
@@ -1352,6 +1361,47 @@ if (typeof module !== 'undefined') module.exports = HW;
     function setBookDeck(name) { ctxDeck = name ? newDeck(name) : null; }
     function renameDeckName(a, b) { const d = decks.find(x => x.name === a); if (d && b && !decks.some(x => x.name === b)) { d.name = b; saveD(); } }
     function studyDeck(name) { const d = decks.find(x => x.name === name); filt = d ? d.id : ''; store.set('hw-deck-view', filt); view('study'); }
+    /* ---- delete a deck, after a confirmation banner, with undo ---- */
+    function dropDeck(id, withWords) {
+      const snap = { decks: JSON.stringify(decks), cards: JSON.stringify(cards), add: S.addDeck, filt };
+      const name = deckName(id);
+      if (withWords) cards = cards.filter(c => !inDeck(c, id));
+      decks = decks.filter(x => x.id !== id);
+      for (const c of cards) if (c.dk) c.dk = c.dk.filter(x => x !== id);
+      if (S.addDeck === id) { S.addDeck = ''; saveS(); }
+      if (filt === id) { filt = ''; store.set('hw-deck-view', ''); }
+      saveD(); save(); badge(); view('decks');
+      toast(`Deleted “${esc(name)}”${withWords ? ' and its words' : ''}.`, 'Undo', () => {
+        decks = JSON.parse(snap.decks); cards = JSON.parse(snap.cards); S.addDeck = snap.add; saveS(); filt = snap.filt; store.set('hw-deck-view', filt || '');
+        saveD(); save(); badge(); view('decks'); toast(`“${esc(name)}” is back.`);
+      });
+    }
+    function askDelDeck(id) {
+      const dk = deckById(id); if (!dk) return;
+      const n = deckCount(id);
+      banner(`<div class="cbT">🗑 Delete the deck “${esc(dk.name)}”?</div>
+        <div class="cbM">${n ? `It has <b>${n}</b> word${n === 1 ? '' : 's'}.` : 'It is empty.'} You can undo this for a few seconds afterwards.</div>
+        <div class="cbB">${n ? `<button class="pri" data-cb="keep">Delete deck, keep the words</button><button class="cbDanger" data-cb="all">Delete deck and its ${n} word${n === 1 ? '' : 's'}</button>` : `<button class="cbDanger" data-cb="keep">Delete deck</button>`}<button data-cb="no">Cancel</button></div>
+        ${n ? '<div class="cbM" style="margin-top:6px;font-size:13px">“Keep the words” leaves them in <b>All words</b> and any other decks. “Delete … words” removes them from your flashcards completely.</div>' : ''}`,
+        k => { if (k === 'keep') dropDeck(id, false); else if (k === 'all') dropDeck(id, true); });
+    }
+    function banner(html, done) {
+      let b = document.getElementById('cbWrap'); if (b) b.remove();
+      b = document.createElement('div'); b.id = 'cbWrap'; b.innerHTML = `<div class="cbBox" role="alertdialog" aria-modal="true">${html}</div>`;
+      document.body.appendChild(b);
+      const close = k => { b.remove(); document.removeEventListener('keydown', key); if (k && k !== 'no') done(k); };
+      const key = e => { if (e.key === 'Escape') close('no'); };
+      document.addEventListener('keydown', key);
+      b.addEventListener('click', e => { const t = e.target.closest('[data-cb]'); if (t) close(t.dataset.cb); else if (e.target === b) close('no'); });
+      const f = b.querySelector('[data-cb="no"]'); if (f) f.focus();
+    }
+    function toast(html, act, fn) {
+      let t = document.getElementById('fcToast'); if (t) t.remove();
+      t = document.createElement('div'); t.id = 'fcToast'; t.innerHTML = `<span>${html}</span>${act ? `<button>${act}</button>` : ''}`;
+      document.body.appendChild(t);
+      const tm = setTimeout(() => t.remove(), act ? 8000 : 3000);
+      if (act) t.querySelector('button').onclick = () => { clearTimeout(tm); t.remove(); fn(); };
+    }
     function scanDeckId(name) { return newDeck(name || 'Scanned words'); }
     function scanAdd(word, res, deckId) { if (!res || !R[res.ri]) return ''; const c = fromResult(res, R[res.ri], word); const st = upsert(c, true); const k = cards.find(x => idOf(x) === idOf(c)); if (k && deckId && addTo(k, deckId)) save(); badge(); return st; }
     function scanDeckOpts(sel) { return decks.map(d => `<option value="${d.id}" ${d.id === sel ? 'selected' : ''}>${esc(d.name)} (${deckCount(d.id)})</option>`).join('') + `<option value="" ${sel ? '' : 'selected'}>No deck (all words)</option><option value="_new">＋ New deck…</option>`; }
